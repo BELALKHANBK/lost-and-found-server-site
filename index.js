@@ -29,11 +29,32 @@ async function run() {
         const jobCollection = client.db('lost&found').collection('items')
             //job api///()
         app.get('/items', async(req, res) => {
-                const cursor = jobCollection.find()
-                const result = await cursor.toArray()
-                res.send(result)
-            })
-            /////✌️✌️✌️✌️/////
+            const cursor = jobCollection.find()
+            const result = await cursor.toArray()
+            res.send(result)
+        })
+
+        // POST: Add Item
+        app.post("/items", async(req, res) => {
+            const item = req.body;
+            const result = await jobCollection.insertOne(item);
+            res.send(result);
+        });
+        ////home page ar card ar 
+        app.get('/items/home', async(req, res) => {
+            const cursor = jobCollection.find().sort({ _id: -1 }).limit(6); // সর্বশেষ 6টা
+            const result = await cursor.toArray();
+            res.send(result);
+        });
+        /////all item
+        app.get('/items', async(req, res) => {
+            const cursor = jobCollection.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        });
+
+
+        /////✌️✌️✌️✌️/////
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
