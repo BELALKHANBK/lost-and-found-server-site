@@ -79,16 +79,16 @@ async function run() {
         })
 
         //  Get all items or filter by user's email
-        /*  app.get('/items', cookie, logger, async(req, res) => { //use jwt
-             const userEmail = req.query.email;
-             console.log('insite lost and found', req.cookies) //jwt
-             if (userEmail !== req.decoded.email) {
-                 return res.status(403).send({ massege: 'forbidden access' })
-             }
-             const query = userEmail ? { userEmail } : {};
-             const items = await itemCollection.find(query).toArray();
-             res.send(items);
-         }); */
+        app.get('/items', cookie, logger, async(req, res) => { //use jwt
+            const userEmail = req.query.email;
+            console.log('insite lost and found', req.cookies) //jwt
+            if (userEmail !== req.decoded.userEmail) {
+                return res.status(403).send({ massege: 'forbidden access' })
+            }
+            const query = userEmail ? { userEmail } : {};
+            const items = await itemCollection.find(query).toArray();
+            res.send(items);
+        });
 
         //  Get latest 6 items for home page
         app.get('/items/home', async(req, res) => {
