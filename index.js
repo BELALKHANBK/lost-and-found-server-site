@@ -10,19 +10,19 @@ const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-    origin: 'http://localhost:5173', //jwt
+    origin: 'https://cozy-crisp-d9f740.netlify.app/', //jwt
     credentials: true //jwt
 }));
 app.use(express.json());
 
 //jwt created
-/* app.use(cookieParser())
+app.use(cookieParser())
     //////////
 const logger = (req, res, next) => {
         console.log('inside the logger middlewer')
         next()
-    } */
-///////cookies
+    }
+    ///////cookies
 const cookie = (req, res, next) => {
     const token = req.cookies.token;
     console.log('cookie in the middleware', token)
