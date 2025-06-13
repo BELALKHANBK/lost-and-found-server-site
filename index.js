@@ -16,13 +16,13 @@ app.use(cors({
 app.use(express.json());
 
 //jwt created
-app.use(cookieParser())
+/* app.use(cookieParser())
     //////////
 const logger = (req, res, next) => {
         console.log('inside the logger middlewer')
         next()
-    }
-    ///////cookies
+    } */
+///////cookies
 const cookie = (req, res, next) => {
     const token = req.cookies.token;
     console.log('cookie in the middleware', token)
@@ -79,6 +79,16 @@ async function run() {
         })
 
         //  Get all items or filter by user's email
+        /*  app.get('/items', cookie, logger, async(req, res) => { //use jwt
+             const userEmail = req.query.email;
+             console.log('insite lost and found', req.cookies) //jwt
+             if (userEmail !== req.decoded.email) {
+                 return res.status(403).send({ massege: 'forbidden access' })
+             }
+             const query = userEmail ? { userEmail } : {};
+             const items = await itemCollection.find(query).toArray();
+             res.send(items);
+         }); */
         app.get('/items', cookie, logger, async(req, res) => { //use jwt
             const userEmail = req.query.email;
             console.log('insite lost and found', req.cookies) //jwt
@@ -169,4 +179,4 @@ app.get('/', (req, res) => {
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
-});
+})
