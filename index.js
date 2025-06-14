@@ -10,7 +10,7 @@ const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-    origin: 'https://cozy-crisp-d9f740.netlify.app/', //jwt
+    origin: 'http://localhost:5173', //jwt
     credentials: true //jwt
 }));
 app.use(express.json());
@@ -41,6 +41,31 @@ const cookie = (req, res, next) => {
     });
 };
 
+
+
+
+//firebase token
+var admin = require("firebase-admin");
+
+var serviceAccount = require("./firebase.active.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
+
+
+
+const verifyFirebase = async(req, res, next) => {
+    const token = req.headers.authorizations;
+    const vreify = req.headers.authorizations.split('')[1]
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+    const userIf = await admin.auth().verifyIdToken(token)
+    req.tokenEmail = userIf.email
+    next()
+}
 
 // MongoDB Connection URI
 const uri = `mongodb+srv://${process.env.DB_USER_NAME}:${process.env.DB_USER_PASS}@cluster0.eoybt2t.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -95,6 +120,10 @@ async function run() {
             if (userEmail !== req.decoded.userEmail) {
                 return res.status(403).send({ massege: 'forbidden access' })
             }
+            //firebase
+            /*     if (req.tokenEmail != userEmail) {
+                    return res.status(403).send({ message: 'forbiddem access' })
+                } */
             const query = userEmail ? { userEmail } : {};
             const items = await itemCollection.find(query).toArray();
             res.send(items);
