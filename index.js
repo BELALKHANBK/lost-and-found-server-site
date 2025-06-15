@@ -1,73 +1,48 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const jwt = require('jsonwebtoken') //jwt
-const cookieParser = require('cookie-parser') //cookie jwt
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
+// Middleware - CORS 
+
+
 app.use(cors({
-    origin: 'http://localhost:5173', //jwt
-    credentials: true //jwt
+    origin: [
+        'http://localhost:5173',
+        'https://lost-and-found-website-8c162.web.app', // your frontend
+        'https://lost-and-found-website-8c162.firebaseapp.com', // firebase fallback
+        'https://lost-and-found-hazel.vercel.app', // backend URL 1
+        'https://lost-and-found-arih3ceii-belals-projects-258f0a6a.vercel.app' // backend URL 2
+    ],
+    credentials: true
 }));
+
+
 app.use(express.json());
+app.use(cookieParser());
 
-//jwt created
-app.use(cookieParser())
-    //////////
-const logger = (req, res, next) => {
-        console.log('inside the logger middlewer')
-        next()
-    }
-    ///////cookies
-const cookie = (req, res, next) => {
+//
+const verifyJWT = (req, res, next) => {
     const token = req.cookies.token;
-    console.log('cookie in the middleware', token)
-
     if (!token) {
-        return res.status(401).send({ message: 'unauthorized access' });
+        return res.status(401).json({ message: 'Unauthorized access: No token' });
     }
 
     jwt.verify(token, process.env.JWT_SECRET_KEY, (err, decoded) => {
         if (err) {
-            return res.status(401).send({ message: 'unauthorized access' });
+            return res.status(401).json({ message: 'Unauthorized access: Invalid token' });
         }
-
-        req.decoded = decoded; //  decoded user info req.user 
+        req.decoded = decoded; // req.decoded.userEmail 
         next();
     });
 };
 
-
-
-
-//firebase token
-var admin = require("firebase-admin");
-
-var serviceAccount = require("./firebase.active.json");
-
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-});
-
-
-
-
-const verifyFirebase = async(req, res, next) => {
-    const token = req.headers.authorizations;
-    const vreify = req.headers.authorizations.split('')[1]
-    if (!token) {
-        return res.status(401).send({ message: 'unauthorized access' })
-    }
-    const userIf = await admin.auth().verifyIdToken(token)
-    req.tokenEmail = userIf.email
-    next()
-}
-
-// MongoDB Connection URI
+// MongoDB connection URI
 const uri = `mongodb+srv://${process.env.DB_USER_NAME}:${process.env.DB_USER_PASS}@cluster0.eoybt2t.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -80,91 +55,77 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        await client.connect();
-        console.log(" MongoDB Connected");
+        //await client.connect();
+        console.log("MongoDB Connected");
 
         const itemCollection = client.db('lost&found').collection('items');
         const recoveredCollection = client.db('lost&found').collection('recovered');
 
-        //jsonwebtoken
-        app.post('/jwt', async(req, res) => {
-            const user = req.body
-                //token created
-            const token = jwt.sign({ userEmail: user.email }, process.env.JWT_SECRET_KEY, {
-                expiresIn: '20d'
-            });
-
-            console.log(token)
-            res.cookie('token', token, {
-                httpOnly: true,
-                secure: false,
-                sameSite: 'Lax',
-            })
-            res.send({ success: true })
-        })
-
-        //  Get all items or filter by user's email
-        /*  app.get('/items', cookie, logger, async(req, res) => { //use jwt
-             const userEmail = req.query.email;
-             console.log('insite lost and found', req.cookies) //jwt
-             if (userEmail !== req.decoded.email) {
-                 return res.status(403).send({ massege: 'forbidden access' })
-             }
-             const query = userEmail ? { userEmail } : {};
-             const items = await itemCollection.find(query).toArray();
-             res.send(items);
-         }); */
-        app.get('/items', cookie, logger, async(req, res) => { //use jwt
-            const userEmail = req.query.email;
-            console.log('insite lost and found', req.cookies) //jwt
-            if (userEmail !== req.decoded.userEmail) {
-                return res.status(403).send({ massege: 'forbidden access' })
+        // JWT Token 
+        app.post('/jwt', (req, res) => {
+            const user = req.body;
+            if (!user.email) {
+                return res.status(400).json({ message: "Email is required" });
             }
-            //firebase
-            /*     if (req.tokenEmail != userEmail) {
-                    return res.status(403).send({ message: 'forbiddem access' })
-                } */
+            const token = jwt.sign({ userEmail: user.email }, process.env.JWT_SECRET_KEY, { expiresIn: '20d' });
+
+            const cookieOptions = {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+            };
+
+            res.cookie('token', token, cookieOptions);
+            res.json({ success: true, token });
+        });
+
+        // Items GET (JWT middleware ব্যবহার)
+        app.get('/items', verifyJWT, async(req, res) => {
+            const userEmail = req.query.email;
+            if (userEmail !== req.decoded.userEmail) {
+                return res.status(403).json({ message: 'Forbidden access' });
+            }
             const query = userEmail ? { userEmail } : {};
             const items = await itemCollection.find(query).toArray();
-            res.send(items);
+            res.json(items);
         });
 
-        //  Get latest 6 items for home page
+        // Home page latest 6 items
         app.get('/items/home', async(req, res) => {
             const items = await itemCollection.find().sort({ _id: -1 }).limit(6).toArray();
-            res.send(items);
+            res.json(items);
         });
 
-        //  Get single item
+        // Single item by id
         app.get('/items/:id', async(req, res) => {
             const id = req.params.id;
             const item = await itemCollection.findOne({ _id: new ObjectId(id) });
-            res.send(item);
+            res.json(item);
         });
 
-        //  Add new item
-        app.post('/items', cookie, async(req, res) => {
+        // Add new item (JWT middleware)
+        app.post('/items', async(req, res) => {
             const item = req.body;
             const result = await itemCollection.insertOne(item);
-            res.send(result);
+            res.json(result);
         });
 
-        //  Update item
-        app.put('/items/:id', async(req, res) => {
+        // Update item (JWT middleware)
+        app.put('/items/:id', verifyJWT, async(req, res) => {
             const id = req.params.id;
             const updatedItem = req.body;
             const result = await itemCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedItem });
-            res.send(result);
+            res.json(result);
         });
 
-        //  Delete item
+        // Delete item (JWT middleware)
         app.delete('/items/:id', async(req, res) => {
             const id = req.params.id;
             const result = await itemCollection.deleteOne({ _id: new ObjectId(id) });
-            res.send(result);
+            res.json(result);
         });
 
-        //  Mark item as recovered (in items collection)
+        // Mark item as recovered
         app.patch('/items/:id', async(req, res) => {
             const id = req.params.id;
             const { recoveredLocation, recoveredDate } = req.body;
@@ -175,37 +136,44 @@ async function run() {
                     recoveredDate,
                 },
             });
-            res.send(result);
+            res.json(result);
         });
 
-        // Save recovered item to recoveredCollection
-        app.post('/recovered', cookie, async(req, res) => {
-            const recoveredData = req.body; // { title, recoveredLocation, recoveredDate, recoveredBy }
+        // Save recovered item (JWT middleware)
+        app.post('/recovered', verifyJWT, async(req, res) => {
+            const recoveredData = req.body;
             const result = await recoveredCollection.insertOne(recoveredData);
-            res.send(result);
+            res.json(result);
         });
 
-        //  Get recovered items by user email
-        app.get('/recovered', cookie, async(req, res) => { //use cookies
+        // Get recovered items by user email (JWT middleware)
+        app.get('/recovered', verifyJWT, async(req, res) => {
             const email = req.query.email;
+            // Validate email from token vs query
+            if (email !== req.decoded.userEmail) {
+                return res.status(403).json({ message: 'Forbidden access' });
+            }
+            // Match recoveredBy.email
             const query = { "recoveredBy.email": email };
             const items = await recoveredCollection.find(query).toArray();
-            res.send(items);
+            res.json(items);
         });
 
 
+        // Root endpoint
+        app.get('/', (req, res) => {
+            res.send('Lost & Found Server is Running!');
+        });
 
-    } finally {
-        // Optional: await client.close();
+    } catch (err) {
+        console.error(err);
     }
 }
+
+
 run().catch(console.dir);
 
-// Root
-app.get('/', (req, res) => {
-    res.send(' Lost & Found Server is Running!');
-});
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
-})
+});
